@@ -292,6 +292,77 @@ If you're on Python 3.13 and see:
 
 ---
 
+## Deployment
+
+### Local Development
+
+✅ Works on **Windows 10/11, macOS, Ubuntu** with a webcam and Python 3.9–3.11.
+
+```bash
+pip install -r requirements.txt
+python main.py --mode screen
+```
+
+See [START_HERE.md](START_HERE.md) for step-by-step setup.
+
+### Cloud Deployment (Render, AWS, Google Cloud)
+
+✅ **Headless servers** (no physical camera, no display) are fully supported.
+
+Process pre-recorded videos instead of live webcam:
+
+```bash
+python main.py --mode file --input /path/to/walk.mp4
+```
+
+**Key files for cloud deployment:**
+
+- **`runtime.txt`** — Python 3.11.9 (required for MediaPipe compatibility)
+- **`render.yaml`** — Render-specific build & deployment config
+- **`.python-version`** — Local development consistency
+
+**For Render specifically:**
+
+1. Push code to GitHub
+2. Connect repo to Render dashboard
+3. Render auto-detects `render.yaml` and deploys with Python 3.11.9
+4. Use video file mode via API or batch job queue
+
+See [HEADLESS_DEPLOYMENT.md](HEADLESS_DEPLOYMENT.md) for full cloud deployment guide.
+
+### Pre-Deployment Verification
+
+Before deploying to production, run:
+
+```bash
+# Verify all modules compile
+python -m py_compile core/*.py ui/*.py main.py
+
+# Run integration tests
+python test_headless_integration.py
+
+# Test locally with a video file
+python main.py --mode file --input sample.mp4
+```
+
+See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for complete verification steps.
+
+---
+
+## Documentation
+
+| File | Purpose |
+|---|---|
+| [PRODUCTION_RELEASE.md](PRODUCTION_RELEASE.md) | v1.0 release summary, all changes & verification |
+| [START_HERE.md](START_HERE.md) | Quick start guide (5 min setup) |
+| [HEADLESS_DEPLOYMENT.md](HEADLESS_DEPLOYMENT.md) | Cloud deployment (Render, AWS, headless servers) |
+| [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) | 12-step pre-deployment verification |
+| [RENDER_DEPLOYMENT_FIX.md](RENDER_DEPLOYMENT_FIX.md) | Python 3.11.9 configuration details |
+| [PLATFORM_DIFFERENCES.md](PLATFORM_DIFFERENCES.md) | Python vs React Native schema differences |
+| [RELEASE_NOTES.md](RELEASE_NOTES.md) | Detailed v1.0 changelog |
+
+---
+
 ## What's New in v1.0
 
 ✅ **5-second auto-bypass for stuck alignment** — If you can't fit your full body in frame, after 5 seconds the system offers an auto-bypass option instead of trapping you.
