@@ -4,13 +4,15 @@ services:
     runtime: python
     runtimeVersion: 3.11.9
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py --mode history
+    startCommand: gunicorn --workers 1 --threads 2 --worker-class gthread --bind 0.0.0.0:$PORT app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: PIP_DEFAULT_TIMEOUT
         value: "600"
-    preDeployCommand: python -m py_compile core/*.py ui/*.py main.py
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    preDeployCommand: python -m py_compile core/*.py ui/*.py main.py app.py
 
 databases:
   - name: gait-records
