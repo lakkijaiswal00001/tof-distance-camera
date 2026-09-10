@@ -1,0 +1,14 @@
+# ─────────────────────────────────────────────────────────
+#  OA Gait Analysis — Python Dependencies
+#  All packages run fully offline after initial pip install.
+#  Tested on Python 3.9 – 3.11
+# ─────────────────────────────────────────────────────────
+
+# Pose estimation (includes bundled TFLite models — no internet needed at runtime)
+mediapipe>=0.10.0
+
+# Computer vision & video I/O
+opencv-python>=4.8.0
+
+# Numerical / linear algebra (joint angle calculations)
+numpy>=1.24.0
