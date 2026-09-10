@@ -6,7 +6,7 @@
 # ─────────────────────────────────────────────────────────
 
 # Python version constraint (MediaPipe doesn't officially support 3.13 yet)
-python>=3.9,<3.13
+#python>=3.9,<3.13
 
 # Pose estimation (includes bundled TFLite models — no internet needed at runtime)
 mediapipe==0.10.8
