@@ -153,15 +153,10 @@ class OAScreeningPipeline:
         print("  ─" * 28)
 
         # ── Open camera with graceful failure handling ─────────────────────────
-        try:
-            self.camera.open()
-        except CameraError as exc:
-            print(f"\n  [CAMERA ERROR] {exc}")
-            print("  Cannot start session. Check camera connection and try again.")
-            self.dashboard.close()
-            return
-        except Exception as exc:
-            print(f"\n  [UNEXPECTED ERROR] opening camera: {exc}")
+        success, error_msg = self.camera.open_safe()
+        if not success:
+            print(f"\n  {error_msg}")
+            print("  Cannot start session.")
             self.dashboard.close()
             return
 

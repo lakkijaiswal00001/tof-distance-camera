@@ -449,14 +449,28 @@ class CameraInterface:
                     "       Try: pip install opencv-python (includes most codecs)."
                 )
         else:
-            msg = (
-                f"Cannot open webcam (index {self.source}).\n"
-                "  Possible causes:\n"
-                "    • The camera index is wrong — try --camera 0 or --camera 1\n"
-                "    • Another app (Teams, Zoom, OBS…) is using the camera\n"
-                "    • The webcam driver is not installed\n"
-                "    • USB connection is loose or the camera is unplugged"
-            )
+            import os
+            is_headless = not os.environ.get("DISPLAY")
+
+            if is_headless:
+                msg = (
+                    f"Running in headless environment (no display).\n"
+                    "  Cannot access webcam (index {}).\n"
+                    "  For headless deployment:\n"
+                    "    • Use --mode file --input <video_file> to process pre-recorded videos\n"
+                    "    • Or upload video files to the server for batch processing\n"
+                    "  For local development:\n"
+                    "    • Use --mode screen --camera 0 on a machine with a webcam"
+                ).format(self.source)
+            else:
+                msg = (
+                    f"Cannot open webcam (index {self.source}).\n"
+                    "  Possible causes:\n"
+                    "    • The camera index is wrong — try --camera 0 or --camera 1\n"
+                    "    • Another app (Teams, Zoom, OBS…) is using the camera\n"
+                    "    • The webcam driver is not installed\n"
+                    "    • USB connection is loose or the camera is unplugged"
+                )
 
         log.error("CameraInterface.open_safe: %s", msg)
         print(f"\n[CAMERA ERROR] {msg}\n")
