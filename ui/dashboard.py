@@ -20,6 +20,7 @@ Design principles:
 
 from __future__ import annotations
 
+import os
 import textwrap
 from typing import List, Optional
 
@@ -30,6 +31,18 @@ from core.camera       import AlignmentFeedback, ValidationStatus
 from core.gait_processor import GaitMetrics
 from core.oa_classifier  import RiskAssessment, RiskLevel
 from core.database       import SessionRecord
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Headless Environment Detection
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _is_headless() -> bool:
+    """Check if running in a headless environment (no display)."""
+    return not os.environ.get("DISPLAY") or os.environ.get("HEADLESS") == "true"
+
+
+_HEADLESS_MODE = _is_headless()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -79,8 +92,17 @@ class GaitDashboard:
     def __init__(self, window_name: str = WINDOW, panel_width: int = 320) -> None:
         self._win   = window_name
         self._pw    = panel_width
-        cv2.namedWindow(self._win, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self._win, 1280, 720)
+        self._headless = _HEADLESS_MODE
+
+        if not self._headless:
+            try:
+                cv2.namedWindow(self._win, cv2.WINDOW_NORMAL)
+                cv2.resizeWindow(self._win, 1280, 720)
+            except Exception as e:
+                print(f"[WARN] Failed to create window: {e}. Running in headless mode.")
+                self._headless = True
+        else:
+            print("[INFO] Running in headless mode (no display available).")
 
     # ── Alignment phase ───────────────────────────────────────────────────────
 
@@ -378,13 +400,14 @@ class GaitDashboard:
     def render_history(self, records: List[SessionRecord]) -> None:
         """
         Display a tabular session history in both terminal and OpenCV window.
+        In headless mode, displays terminal table only.
         Press Q or ESC to exit history view.
         """
         if not records:
             print("\n  No sessions recorded yet.\n")
             return
 
-        # Terminal table
+        # Terminal table (always shown)
         print("\n" + "─" * 100)
         print(f"  {'ID':>4}  {'Timestamp':26}  {'Risk Level':35}  "
               f"{'Score':>5}  {'Steps':>5}  {'Cadence':>9}")
@@ -396,62 +419,84 @@ class GaitDashboard:
                   f"{r.risk_score:>5}  {r.step_count:>5}  {cad:>9}")
         print("─" * 100 + "\n")
 
-        # OpenCV window table
-        row_h = 36
-        total_h = max(720, 80 + row_h * (len(records) + 1))
-        canvas = np.full((total_h, 1280, 3), _CLR_BG, dtype=np.uint8)
+        # OpenCV window table (skip in headless mode)
+        if self._headless:
+            print("[INFO] Running in headless mode. Skipping graphical history display.")
+            return
 
-        cv2.putText(canvas, "SESSION HISTORY", (20, 45),
-                    _FONT, 1.0, _CLR_ACCENT, 2, cv2.LINE_AA)
-        cv2.line(canvas, (20, 58), (1260, 58), (50, 55, 70), 1)
+        try:
+            row_h = 36
+            total_h = max(720, 80 + row_h * (len(records) + 1))
+            canvas = np.full((total_h, 1280, 3), _CLR_BG, dtype=np.uint8)
 
-        headers = ["ID", "Timestamp", "Risk Level", "Score", "Steps", "Cadence (spm)"]
-        col_xs  = [20, 80, 280, 570, 660, 740]
+            cv2.putText(canvas, "SESSION HISTORY", (20, 45),
+                        _FONT, 1.0, _CLR_ACCENT, 2, cv2.LINE_AA)
+            cv2.line(canvas, (20, 58), (1260, 58), (50, 55, 70), 1)
 
-        for col, (hdr, cx) in enumerate(zip(headers, col_xs)):
-            cv2.putText(canvas, hdr, (cx, 88), _FONT_SMALL, 0.60,
-                        _CLR_DIM, 1, cv2.LINE_AA)
+            headers = ["ID", "Timestamp", "Risk Level", "Score", "Steps", "Cadence (spm)"]
+            col_xs  = [20, 80, 280, 570, 660, 740]
 
-        for i, r in enumerate(records):
-            y = 88 + row_h * (i + 1)
-            bg_color = (28, 28, 38) if i % 2 == 0 else (35, 35, 48)
-            cv2.rectangle(canvas, (20, y - 22), (1260, y + 8), bg_color, -1)
+            for col, (hdr, cx) in enumerate(zip(headers, col_xs)):
+                cv2.putText(canvas, hdr, (cx, 88), _FONT_SMALL, 0.60,
+                            _CLR_DIM, 1, cv2.LINE_AA)
 
-            risk_col = (
-                _CLR_READY    if "Low"  in r.risk_level else
-                _CLR_MODERATE if "Mod"  in r.risk_level else
-                _CLR_DANGER
-            )
-            ts = r.timestamp[:19].replace("T", " ")
-            cad = f"{r.cadence_spm:.0f}" if r.cadence_spm else "N/A"
+            for i, r in enumerate(records):
+                y = 88 + row_h * (i + 1)
+                bg_color = (28, 28, 38) if i % 2 == 0 else (35, 35, 48)
+                cv2.rectangle(canvas, (20, y - 22), (1260, y + 8), bg_color, -1)
 
-            values = [str(r.id), ts, r.risk_level, str(r.risk_score),
-                      str(r.step_count), cad]
-            colors = [_CLR_TEXT, _CLR_TEXT, risk_col, risk_col, _CLR_TEXT, _CLR_TEXT]
+                risk_col = (
+                    _CLR_READY    if "Low"  in r.risk_level else
+                    _CLR_MODERATE if "Mod"  in r.risk_level else
+                    _CLR_DANGER
+                )
+                ts = r.timestamp[:19].replace("T", " ")
+                cad = f"{r.cadence_spm:.0f}" if r.cadence_spm else "N/A"
 
-            for val, cx, col in zip(values, col_xs, colors):
-                cv2.putText(canvas, val, (cx, y), _FONT_SMALL, 0.58,
-                            col, 1, cv2.LINE_AA)
+                values = [str(r.id), ts, r.risk_level, str(r.risk_score),
+                          str(r.step_count), cad]
+                colors = [_CLR_TEXT, _CLR_TEXT, risk_col, risk_col, _CLR_TEXT, _CLR_TEXT]
 
-        cv2.putText(canvas, "Press Q or ESC to exit",
-                    (20, total_h - 14), _FONT_SMALL, 0.52, _CLR_DIM, 1, cv2.LINE_AA)
+                for val, cx, col in zip(values, col_xs, colors):
+                    cv2.putText(canvas, val, (cx, y), _FONT_SMALL, 0.58,
+                                col, 1, cv2.LINE_AA)
 
-        cv2.imshow(self._win, canvas)
-        while True:
-            k = cv2.waitKey(50) & 0xFF
-            if k in (ord("q"), ord("Q"), 27):
-                break
+            cv2.putText(canvas, "Press Q or ESC to exit",
+                        (20, total_h - 14), _FONT_SMALL, 0.52, _CLR_DIM, 1, cv2.LINE_AA)
+
+            cv2.imshow(self._win, canvas)
+            while True:
+                k = cv2.waitKey(50) & 0xFF
+                if k in (ord("q"), ord("Q"), 27):
+                    break
+        except Exception as e:
+            print(f"[WARN] Failed to display history window: {e}")
 
     # ── Window helpers ────────────────────────────────────────────────────────
 
     def show(self, frame: np.ndarray) -> None:
-        """Display *frame* in the managed window."""
-        cv2.imshow(self._win, frame)
+        """Display *frame* in the managed window (no-op in headless mode)."""
+        if self._headless:
+            return
+        try:
+            cv2.imshow(self._win, frame)
+        except Exception as e:
+            print(f"[WARN] Failed to display frame: {e}")
 
     def wait_key(self, ms: int = 1) -> int:
-        """cv2.waitKey wrapper — returns the key code."""
-        return cv2.waitKey(ms) & 0xFF
+        """cv2.waitKey wrapper — returns the key code (no-op in headless mode)."""
+        if self._headless:
+            return 0  # Return 0 (no key pressed) in headless mode
+        try:
+            return cv2.waitKey(ms) & 0xFF
+        except Exception:
+            return 0
 
     def close(self) -> None:
-        """Destroy the OpenCV window."""
-        cv2.destroyWindow(self._win)
+        """Destroy the OpenCV window (no-op in headless mode)."""
+        if self._headless:
+            return
+        try:
+            cv2.destroyWindow(self._win)
+        except Exception:
+            pass

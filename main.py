@@ -209,19 +209,26 @@ class OAScreeningPipeline:
             print(f"  Risk Score : {assessment.score}")
             print(f"  Summary    : {assessment.summary}\n")
 
-            # Build a blank canvas for summary (camera is still open but not used)
-            _, frame = self.camera.read()
-            if frame is None:
-                frame_h = _DEFAULT_HEIGHT
-                frame_w = _DEFAULT_WIDTH
-                frame = np.zeros((frame_h, frame_w, 3), dtype=np.uint8)
+            # Display summary (skip graphical display in headless mode)
+            if self.dashboard._headless:
+                print("[INFO] Running in headless mode. Skipping graphical summary display.")
+            else:
+                try:
+                    # Build a blank canvas for summary (camera is still open but not used)
+                    _, frame = self.camera.read()
+                    if frame is None:
+                        frame_h = _DEFAULT_HEIGHT
+                        frame_w = _DEFAULT_WIDTH
+                        frame = np.zeros((frame_h, frame_w, 3), dtype=np.uint8)
 
-            summary_frame = self.dashboard.render_summary(
-                frame, metrics, assessment, session_id if session_id != -1 else 0
-            )
-            self.dashboard.show(summary_frame)
-            print("  Displaying summary — press any key to exit.")
-            cv2.waitKey(0)
+                    summary_frame = self.dashboard.render_summary(
+                        frame, metrics, assessment, session_id if session_id != -1 else 0
+                    )
+                    self.dashboard.show(summary_frame)
+                    print("  Displaying summary — press any key to exit.")
+                    cv2.waitKey(0)
+                except Exception as e:
+                    print(f"[WARN] Failed to display summary: {e}")
 
         finally:
             self.camera.release()
