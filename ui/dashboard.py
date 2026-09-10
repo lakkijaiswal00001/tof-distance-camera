@@ -108,6 +108,8 @@ class GaitDashboard:
             border_color = _CLR_READY
         elif st == ValidationStatus.NO_PERSON:
             border_color = _CLR_DIM
+        elif st == ValidationStatus.AUTO_BYPASS_TIMEOUT:
+            border_color = _CLR_WARN  # Warning: timeout reached
         else:
             border_color = _CLR_WARN
 

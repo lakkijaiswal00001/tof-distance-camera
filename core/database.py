@@ -385,8 +385,9 @@ class DatabaseManager:
             cur = conn.execute(
                 "DELETE FROM screening_sessions WHERE id = ?", (session_id,)
             )
+            rowcount = cur.rowcount  # Capture BEFORE exiting context
             conn.commit()
-        return cur.rowcount > 0
+        return rowcount > 0
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 

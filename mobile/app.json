@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "OA Gait Screener",
+    "slug": "oa-gait-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E1A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.oagait.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is needed to record walking video for gait analysis.",
+        "NSBluetoothAlwaysUsageDescription": "Bluetooth is used to connect FSR pressure sensors."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0E1A"
+      },
+      "package": "com.oagait.mobile",
+      "permissions": [
+        "CAMERA",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow OA Gait Screener to access your camera for gait analysis."
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "oa-gait-mobile"
+      }
+    }
+  }
+}

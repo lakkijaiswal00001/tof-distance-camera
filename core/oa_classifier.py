@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List
 
+import numpy as np
+
 from .gait_processor import GaitMetrics
 
 
@@ -291,6 +293,10 @@ class OARiskClassifier:
     # ── Scoring sub-rules ─────────────────────────────────────────────────────
 
     def _score_knee_rom(self, rom: float) -> tuple[int, str]:
+        rom = float(rom or 0.0)
+        if np.isnan(rom) or rom < 0:
+            return 0, "Insufficient data for knee ROM assessment."
+
         t = self._t
         if rom < t["knee_rom_low_severe"]:
             return 2, (

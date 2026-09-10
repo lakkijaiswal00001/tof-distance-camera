@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Optional
 
 import cv2
+import numpy as np
 
 # ── Package imports ───────────────────────────────────────────────────────────
 from core.camera         import CameraInterface, CameraError, AlignmentValidator, ValidationStatus
@@ -213,9 +214,7 @@ class OAScreeningPipeline:
             if frame is None:
                 frame_h = _DEFAULT_HEIGHT
                 frame_w = _DEFAULT_WIDTH
-                frame = __import__("numpy").zeros(
-                    (frame_h, frame_w, 3), dtype=__import__("numpy").uint8
-                )
+                frame = np.zeros((frame_h, frame_w, 3), dtype=np.uint8)
 
             summary_frame = self.dashboard.render_summary(
                 frame, metrics, assessment, session_id if session_id != -1 else 0
@@ -329,15 +328,18 @@ class OAScreeningPipeline:
                 self.processor.update(pose)
                 self.estimator.draw_landmarks(frame, pose)
 
+            # Compute real live metrics (not fabricated)
+            live_metrics = self.processor.compute_metrics()
+
             # Live HUD
             live = self.dashboard.render_live(
                 frame=frame,
                 left_knee=self.processor.latest_left_knee_angle,
                 right_knee=self.processor.latest_right_knee_angle,
-                hip_sway=0.0,          # full value computed at end
-                step_count=self.processor.frame_count // 15,  # approx
+                hip_sway=live_metrics.hip_sway_asymmetry_pct,
+                step_count=len(self.processor._step_events),  # real step count
                 elapsed=elapsed,
-                cadence=0.0,
+                cadence=live_metrics.cadence_spm,
             )
             self.dashboard.show(live)
 

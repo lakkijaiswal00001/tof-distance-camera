@@ -46,12 +46,13 @@ class CameraError(RuntimeError):
 
 class ValidationStatus(Enum):
     """Possible outcomes of a pre-recording alignment check."""
-    NO_PERSON    = auto()   # No pose detected in frame
-    TOO_CLOSE    = auto()   # Subject too close to camera
-    TOO_FAR      = auto()   # Subject too far from camera
-    OFF_CENTER   = auto()   # Subject not horizontally centred
-    PARTIAL_BODY = auto()   # Ankles or head not fully visible
-    READY        = auto()   # Good position — safe to start recording
+    NO_PERSON            = auto()   # No pose detected in frame
+    TOO_CLOSE            = auto()   # Subject too close to camera
+    TOO_FAR              = auto()   # Subject too far from camera
+    OFF_CENTER           = auto()   # Subject not horizontally centred
+    PARTIAL_BODY         = auto()   # Ankles or head not fully visible
+    AUTO_BYPASS_TIMEOUT  = auto()   # Stuck for 5+ seconds; offer auto-bypass
+    READY                = auto()   # Good position — safe to start recording
 
 
 @dataclass
@@ -105,12 +106,17 @@ class AlignmentValidator:
         min_body_fraction: float = 0.55,
         max_body_fraction: float = 0.92,
         required_stable_frames: int = 10,
+        auto_bypass_timeout_s: float = 5.0,
     ) -> None:
         self.centre_tolerance = centre_tolerance
         self.min_body_fraction = min_body_fraction
         self.max_body_fraction = max_body_fraction
         self.required_stable_frames = required_stable_frames
+        self.auto_bypass_timeout_s = auto_bypass_timeout_s
         self._stable_count = 0
+        # Watchdog for stuck alignment states
+        self._last_non_ready_status: Optional[ValidationStatus] = None
+        self._non_ready_start_time: Optional[float] = None
 
     def check(self, landmarks) -> AlignmentFeedback:
         """
@@ -127,9 +133,9 @@ class AlignmentValidator:
         """
         if landmarks is None:
             self._stable_count = 0
-            return AlignmentFeedback(
-                status=ValidationStatus.NO_PERSON,
-                message="No person detected. Please step into the frame.",
+            return self._check_auto_bypass(
+                ValidationStatus.NO_PERSON,
+                "No person detected. Please step into the frame.",
             )
 
         lm = landmarks.landmark
@@ -147,9 +153,9 @@ class AlignmentValidator:
         critical = [nose, l_ankle, r_ankle, l_hip, r_hip]
         if any(pt.visibility < 0.4 for pt in critical):
             self._stable_count = 0
-            return AlignmentFeedback(
-                status=ValidationStatus.PARTIAL_BODY,
-                message="Ensure your full body (head to feet) is visible.",
+            return self._check_auto_bypass(
+                ValidationStatus.PARTIAL_BODY,
+                "Ensure your full body (head to feet) is visible.",
             )
 
         # ── Bounding box in normalised coords ────────────────────────────────
@@ -165,18 +171,18 @@ class AlignmentValidator:
         # ── Distance check (via body-height fraction) ────────────────────────
         if body_height_frac > self.max_body_fraction:
             self._stable_count = 0
-            return AlignmentFeedback(
-                status=ValidationStatus.TOO_CLOSE,
-                message="Too close! Please step back from the camera.",
+            return self._check_auto_bypass(
+                ValidationStatus.TOO_CLOSE,
+                "Too close! Please step back from the camera.",
                 bbox=bbox,
                 distance_tier="close",
             )
 
         if body_height_frac < self.min_body_fraction:
             self._stable_count = 0
-            return AlignmentFeedback(
-                status=ValidationStatus.TOO_FAR,
-                message="Too far! Please step closer to the camera.",
+            return self._check_auto_bypass(
+                ValidationStatus.TOO_FAR,
+                "Too far! Please step closer to the camera.",
                 bbox=bbox,
                 distance_tier="far",
             )
@@ -186,9 +192,9 @@ class AlignmentValidator:
         if offset > self.centre_tolerance:
             direction = "left" if body_centre_x < 0.5 else "right"
             self._stable_count = 0
-            return AlignmentFeedback(
-                status=ValidationStatus.OFF_CENTER,
-                message=f"Move slightly to the {direction} to centre yourself.",
+            return self._check_auto_bypass(
+                ValidationStatus.OFF_CENTER,
+                f"Move slightly to the {direction} to centre yourself.",
                 bbox=bbox,
                 distance_tier="ok",
             )
@@ -211,9 +217,85 @@ class AlignmentValidator:
             distance_tier="ok",
         )
 
+    # ── Auto-bypass watchdog helper ────────────────────────────────────────
+
+    def _check_auto_bypass(
+        self,
+        status: ValidationStatus,
+        message: str,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+        distance_tier: Optional[str] = None,
+    ) -> AlignmentFeedback:
+        """
+        Check if we've been stuck on the same non-READY status for too long.
+        If so, offer an auto-bypass option with a countdown.
+
+        Parameters
+        ----------
+        status : ValidationStatus
+            The proposed status (should not be READY).
+        message : str
+            The base guidance message.
+        bbox, distance_tier : optional
+            Additional feedback fields.
+
+        Returns
+        -------
+        AlignmentFeedback
+            Either the original status (if just started stuck), or
+            AUTO_BYPASS_TIMEOUT (if we've been stuck for ≥auto_bypass_timeout_s).
+        """
+        now = time.monotonic()
+
+        # First time seeing this status: record start time
+        if status != self._last_non_ready_status:
+            self._last_non_ready_status = status
+            self._non_ready_start_time = now
+            return AlignmentFeedback(
+                status=status,
+                message=message,
+                bbox=bbox,
+                distance_tier=distance_tier,
+            )
+
+        # Already on this status: check elapsed time
+        if self._non_ready_start_time is None:
+            self._non_ready_start_time = now
+            return AlignmentFeedback(
+                status=status,
+                message=message,
+                bbox=bbox,
+                distance_tier=distance_tier,
+            )
+
+        elapsed = now - self._non_ready_start_time
+        remaining = max(0, self.auto_bypass_timeout_s - elapsed)
+
+        if elapsed >= self.auto_bypass_timeout_s:
+            # Timeout reached: offer auto-bypass
+            return AlignmentFeedback(
+                status=ValidationStatus.AUTO_BYPASS_TIMEOUT,
+                message=(
+                    f"{message}\n\n"
+                    "Press S to skip alignment, or wait for auto-bypass…"
+                ),
+                bbox=bbox,
+                distance_tier=distance_tier,
+            )
+        else:
+            # Still waiting: show countdown
+            return AlignmentFeedback(
+                status=status,
+                message=f"{message}\n(Auto-bypass in {remaining:.0f}s, or press S to skip)",
+                bbox=bbox,
+                distance_tier=distance_tier,
+            )
+
     def reset(self) -> None:
-        """Reset the stable-frame debounce counter."""
+        """Reset the stable-frame debounce counter and watchdog."""
         self._stable_count = 0
+        self._last_non_ready_status = None
+        self._non_ready_start_time = None
 
 
 # ──────────────────────────────────────────────────────────────────────────────

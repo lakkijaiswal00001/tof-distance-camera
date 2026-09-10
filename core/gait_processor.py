@@ -120,6 +120,11 @@ class GaitMetrics:
     left_stance_ratio:  float = 0.0      # fraction 0-1
     right_stance_ratio: float = 0.0
 
+    # ── Upper-body fallback (when ankles/knees not visible) ─────────────
+    uses_upper_body_fallback: bool = False
+    shoulder_rom_mean: float = 0.0       # shoulder angle ROM when fallback active
+    hip_twist_angle_mean: float = 0.0    # torso twist angle when fallback active
+
     # ── Sample count ─────────────────────────────────────────────────────────
     frame_count: int = 0
     step_count:  int = 0
@@ -277,11 +282,16 @@ class GaitProcessor:
         # Hip width span (normalised)
         hip_width = float(np.mean(np.abs(l_hip_xs - r_hip_xs)))
         if hip_width > 1e-6:
-            left_dev  = float(np.std(l_hip_xs - mid_xs))
-            right_dev = float(np.std(r_hip_xs - mid_xs))
-            metrics.hip_sway_asymmetry_pct = (
+            left_dev  = float(np.std(l_hip_xs - mid_xs)) or 0.0
+            right_dev = float(np.std(r_hip_xs - mid_xs)) or 0.0
+            metrics.hip_sway_asymmetry_pct = float(
                 abs(left_dev - right_dev) / hip_width * 100.0
             )
+            # Guard against NaN
+            if np.isnan(metrics.hip_sway_asymmetry_pct) or metrics.hip_sway_asymmetry_pct < 0:
+                metrics.hip_sway_asymmetry_pct = 0.0
+        else:
+            metrics.hip_sway_asymmetry_pct = 0.0
 
         # ── Stance phase ratios ───────────────────────────────────────────────
         left_stance_frames  = sum(1 for s in buf if s.left_on_ground)
@@ -290,25 +300,26 @@ class GaitProcessor:
         metrics.right_stance_ratio = right_stance_frames / metrics.frame_count
 
         # ── Stride duration (from heel-strike timestamps) ─────────────────────
-        left_strikes  = [e for e in self._step_events if e.side == "left"]
-        right_strikes = [e for e in self._step_events if e.side == "right"]
+        # Fixed: compute cadence from ALL heel strikes (both sides), not just one side
+        all_strikes = sorted(
+            [(e.timestamp, e.side) for e in self._step_events],
+            key=lambda x: x[0]
+        )
 
-        stride_durations: List[float] = []
-        for events in (left_strikes, right_strikes):
-            for i in range(1, len(events)):
-                stride_durations.append(
-                    events[i].timestamp - events[i - 1].timestamp
-                )
+        step_intervals: List[float] = []
+        for i in range(1, len(all_strikes)):
+            step_intervals.append(all_strikes[i][0] - all_strikes[i - 1][0])
 
-        if stride_durations:
-            sd = np.array(stride_durations)
-            metrics.stride_duration_mean = float(np.mean(sd))
-            metrics.stride_duration_cv   = (
-                float(np.std(sd) / np.mean(sd) * 100.0)
-                if np.mean(sd) > 0 else 0.0
+        if step_intervals:
+            si = np.array(step_intervals)
+            mean_step_interval = float(np.mean(si))
+            metrics.cadence_spm = 60.0 / mean_step_interval if mean_step_interval > 0 else 0.0
+            # Stride = 2 steps (left + right)
+            metrics.stride_duration_mean = mean_step_interval * 2.0
+            metrics.stride_duration_cv = (
+                float(np.std(si) / mean_step_interval * 100.0)
+                if mean_step_interval > 0 else 0.0
             )
-            if metrics.stride_duration_mean > 0:
-                metrics.cadence_spm = 60.0 / metrics.stride_duration_mean
 
         return metrics
 
@@ -343,6 +354,9 @@ class GaitProcessor:
         We maintain a 3-frame window; a peak is detected when the middle
         value exceeds both neighbours — i.e. the foot was as close to ground
         as it gets before lifting off again.
+
+        Fixed: use strict inequality to avoid triggering on flat plateaus
+        (stationary subjects where ankle_y doesn't change).
         """
         history = (
             self._left_ankle_y_history
@@ -360,7 +374,8 @@ class GaitProcessor:
 
         h = list(history)
         # Local maximum in Y (foot at lowest point / ground contact peak)
-        if h[-2] >= h[-3] and h[-2] >= h[-1]:
+        # FIXED: use > on first check to avoid flat-plateau false positives
+        if h[-2] > h[-3] and h[-2] >= h[-1]:
             if frame_idx - last_frame >= _MIN_STEP_FRAMES:
                 event = StepEvent(
                     side=side,
@@ -372,3 +387,8 @@ class GaitProcessor:
                     self._last_left_strike_frame = frame_idx
                 else:
                     self._last_right_strike_frame = frame_idx
+
+        # ── Prune old events to keep buffer windows aligned ─────────────────
+        # Only keep events from the last 300 frames
+        cutoff_frame = max(0, frame_idx - 300)
+        self._step_events = [e for e in self._step_events if e.frame_index >= cutoff_frame]
