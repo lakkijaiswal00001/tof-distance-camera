@@ -106,7 +106,7 @@ class AlignmentValidator:
         min_body_fraction: float = 0.45,
         max_body_fraction: float = 0.95,
         required_stable_frames: int = 5,
-        auto_bypass_timeout_s: float = 5.0,
+        auto_bypass_timeout_s: float = 10.0,
     ) -> None:
         self.centre_tolerance = centre_tolerance
         self.min_body_fraction = min_body_fraction
