@@ -26,7 +26,6 @@ repo_root = Path(__file__).parent
 sys.path.insert(0, str(repo_root))
 
 from core.database import DatabaseManager
-from main import OAScreeningPipeline
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -92,6 +91,9 @@ def analyze_video():
       - session_id, risk_level, risk_score, metrics
     """
     try:
+        # Import OAScreeningPipeline lazily to avoid import-time side effects
+        from main import OAScreeningPipeline
+
         # Option 1: Accept uploaded file
         if 'video_file' in request.files:
             video_file = request.files['video_file']
