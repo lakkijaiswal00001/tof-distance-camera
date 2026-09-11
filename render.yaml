@@ -15,5 +15,4 @@ services:
 
 databases:
   - name: gait-records
-    dbName: gait_records
     region: oregon
