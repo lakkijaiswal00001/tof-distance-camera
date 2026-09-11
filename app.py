@@ -178,9 +178,11 @@ if __name__ == '__main__':
     log.info("  GET  /api/sessions     - List all sessions")
     log.info("  POST /api/analyze      - Analyze video file")
 
+    log.info(f"Flask app binding to 0.0.0.0:{port}")
     app.run(
         host='0.0.0.0',
         port=port,
         debug=False,
         threaded=True,
+        use_reloader=False,
     )
