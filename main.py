@@ -103,12 +103,8 @@ class OAScreeningPipeline:
         self.model_complexity = model_complexity
 
         # Instantiate all components
-        self.camera     = CameraInterface(
-            source=camera_source,
-            width=_DEFAULT_WIDTH,
-            height=_DEFAULT_HEIGHT,
-            fps=_DEFAULT_FPS,
-        )
+        # Note: Camera is initialized lazily (on-demand) to avoid errors on headless systems
+        self.camera     = None  # Will be created in run_screen() or run_file()
         self.estimator  = PoseEstimator(model_complexity=model_complexity)
         self.processor  = GaitProcessor(fps=float(_DEFAULT_FPS))
         self.validator  = AlignmentValidator()
@@ -120,14 +116,28 @@ class OAScreeningPipeline:
 
     def run_screen(self) -> None:
         """Run a live webcam screening session."""
+        # Initialize camera on demand
+        self.camera = CameraInterface(
+            source=self.source,
+            width=_DEFAULT_WIDTH,
+            height=_DEFAULT_HEIGHT,
+            fps=_DEFAULT_FPS,
+        )
         self._run_session(mode="webcam")
 
-    def run_file(self, path: str) -> None:
-        """Run analysis on a pre-recorded video file."""
+    def run_file(self, path: str) -> tuple:
+        """
+        Run analysis on a pre-recorded video file.
+
+        Returns
+        -------
+        tuple
+            (GaitMetrics, duration_seconds)
+        """
         if not Path(path).exists():
             sys.exit(f"[ERROR] File not found: {path}")
         self.camera = CameraInterface(source=path)
-        self._run_session(mode="file", skip_alignment=True)
+        return self._run_session(mode="file", skip_alignment=True)
 
     def run_history(self) -> None:
         """Display the session history browser."""
@@ -139,7 +149,7 @@ class OAScreeningPipeline:
 
     # ── Session state machine ─────────────────────────────────────────────────
 
-    def _run_session(self, mode: str, skip_alignment: bool = False) -> None:
+    def _run_session(self, mode: str, skip_alignment: bool = False) -> tuple:
         """
         Internal session loop.
 
@@ -147,6 +157,11 @@ class OAScreeningPipeline:
         Phase 2 (Countdown): 3-second countdown before recording.
         Phase 3 (Recording): collect landmarks, update HUD.
         Phase 4 (Analysis):  compute metrics, classify, save, show summary.
+
+        Returns
+        -------
+        tuple
+            (GaitMetrics, duration_seconds)
         """
         print(f"\n  [OA Gait Analysis]  Mode: {mode.upper()}")
         print("  Controls: [Q] quit session  [S] skip alignment")
@@ -158,7 +173,8 @@ class OAScreeningPipeline:
             print(f"\n  {error_msg}")
             print("  Cannot start session.")
             self.dashboard.close()
-            return
+            # Return empty metrics and 0 duration on error
+            return self.processor.compute_metrics(), 0.0
 
         try:
             print(f"  Camera opened: {self.camera.actual_width}×"
@@ -169,14 +185,14 @@ class OAScreeningPipeline:
                 aligned = self._alignment_phase()
                 if not aligned:
                     print("  Session cancelled during alignment.")
-                    return
+                    return self.processor.compute_metrics(), 0.0
 
             # ── Phase 2: Countdown ────────────────────────────────────────────
             if not skip_alignment:
                 cancelled = self._countdown_phase()
                 if cancelled:
                     print("  Session cancelled during countdown.")
-                    return
+                    return self.processor.compute_metrics(), 0.0
 
             # ── Phase 3: Recording ────────────────────────────────────────────
             metrics, duration = self._recording_phase(mode)
@@ -229,6 +245,9 @@ class OAScreeningPipeline:
             self.camera.release()
             self.dashboard.close()
             self.estimator.close()
+
+        # Return metrics and duration on success
+        return metrics, duration
 
     # ── Phase helpers ─────────────────────────────────────────────────────────
 
