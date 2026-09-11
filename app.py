@@ -166,23 +166,3 @@ def status():
     except Exception as e:
         log.error(f"Status error: {e}")
         return jsonify({'error': str(e)}), 500
-
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    log.info(f"Starting CareSetu v1.0 Web Service on port {port}")
-    log.info("Headless mode: Running on Render")
-    log.info("Available endpoints:")
-    log.info("  GET  /                 - Health check")
-    log.info("  GET  /api/status       - Service status")
-    log.info("  GET  /api/sessions     - List all sessions")
-    log.info("  POST /api/analyze      - Analyze video file")
-
-    log.info(f"Flask app binding to 0.0.0.0:{port}")
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=False,
-        threaded=True,
-        use_reloader=False,
-    )
