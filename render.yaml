@@ -12,7 +12,3 @@ services:
       - key: PYTHONUNBUFFERED
         value: "1"
     preDeployCommand: python -m py_compile core/*.py ui/*.py main.py app.py
-
-databases:
-  - name: gait-records
-    region: oregon
