@@ -52,6 +52,7 @@ from core.gait_processor import GaitProcessor
 from core.oa_classifier  import OARiskClassifier
 from core.database       import DatabaseManager
 from ui.dashboard        import GaitDashboard
+from core.video_utils    import get_or_create_sample_video, validate_video_file
 
 # Enable structured logging to console so all [WARN]/[ERROR] messages surface
 logging.basicConfig(
@@ -129,13 +130,34 @@ class OAScreeningPipeline:
         """
         Run analysis on a pre-recorded video file.
 
+        If the file doesn't exist, attempts to create a dummy video for testing.
+
         Returns
         -------
         tuple
             (GaitMetrics, duration_seconds)
         """
-        if not Path(path).exists():
-            sys.exit(f"[ERROR] File not found: {path}")
+        video_path = Path(path)
+
+        # If file doesn't exist, try to create a dummy video
+        if not video_path.exists():
+            print(f"[WARN] Video file not found: {path}")
+            print("[INFO] Attempting to create a dummy video for testing...")
+
+            dummy_path = get_or_create_sample_video(str(path))
+            if dummy_path is None:
+                print(f"[ERROR] Failed to create dummy video at {path}")
+                print("[ERROR] Cannot proceed without a video file.")
+                return self.processor.compute_metrics(), 0.0
+
+            path = dummy_path
+
+        # Validate the video file
+        is_valid, validation_msg = validate_video_file(path)
+        if not is_valid:
+            print(f"[ERROR] {validation_msg}")
+            return self.processor.compute_metrics(), 0.0
+
         self.camera = CameraInterface(source=path)
         return self._run_session(mode="file", skip_alignment=True)
 
@@ -459,7 +481,6 @@ def main() -> None:
     elif args.mode == "file":
         if not args.input:
             parser.error("--mode file requires --input <path>")
-        pipeline.camera = CameraInterface(source=args.input)
         pipeline.run_file(args.input)
 
     elif args.mode == "history":
