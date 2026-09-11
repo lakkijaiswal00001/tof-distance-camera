@@ -196,12 +196,13 @@ def status():
         return jsonify({'error': str(e)}), 500
 
 
+# Start background analysis thread when app is created (for gunicorn)
+log.info("Starting background gait analysis thread...")
+analysis_thread = threading.Thread(target=run_startup_analysis, daemon=True)
+analysis_thread.start()
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     log.info(f"Starting Flask web service on 0.0.0.0:{port}")
-
-    # Start background analysis thread
-    analysis_thread = threading.Thread(target=run_startup_analysis, daemon=True)
-    analysis_thread.start()
-
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
