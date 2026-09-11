@@ -433,10 +433,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode", "-m",
         choices=["screen", "file", "history"],
-        default="file",
+        default="screen",
         help=(
-            "file    = analyse a video file (default)\n"
-            "screen  = live webcam session\n"
+            "screen  = live webcam session (default)\n"
+            "file    = analyse a pre-recorded video\n"
             "history = browse past sessions"
         ),
     )
@@ -498,9 +498,9 @@ def main() -> None:
         pipeline.run_screen()
 
     elif args.mode == "file":
-        # Default to sample.mp4 if no input file specified
-        input_file = args.input if args.input else "sample.mp4"
-        pipeline.run_file(input_file)
+        if not args.input:
+            parser.error("--mode file requires --input <path>")
+        pipeline.run_file(args.input)
 
     elif args.mode == "history":
         pipeline.run_history()
