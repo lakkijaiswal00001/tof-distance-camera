@@ -31,6 +31,11 @@ from core.database import DatabaseManager
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+# Log that this is the Flask web app, not the CLI
+log.info("="*60)
+log.info("FLASK WEB APPLICATION STARTING")
+log.info("="*60)
+
 app = Flask(__name__)
 
 # Initialize database
