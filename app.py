@@ -17,6 +17,10 @@ from pathlib import Path
 import json
 import logging
 
+# Detect headless/cloud environment before any imports that might access hardware
+is_headless = os.environ.get('RENDER') == 'true' or os.environ.get('HEADLESS') == 'true' or not os.environ.get('DISPLAY')
+os.environ['HEADLESS'] = 'true'  # Set for downstream modules
+
 # Add repo to path
 repo_root = Path(__file__).parent
 sys.path.insert(0, str(repo_root))

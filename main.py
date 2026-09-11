@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -461,6 +462,19 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args   = parser.parse_args()
+
+    # Detect headless/cloud environment
+    is_headless = (
+        os.environ.get('RENDER') == 'true' or
+        os.environ.get('HEADLESS') == 'true' or
+        not os.environ.get('DISPLAY')
+    )
+
+    # Default to file mode if headless and mode not explicitly specified
+    if is_headless and args.mode == 'screen':
+        args.mode = 'file'
+        if not args.input:
+            args.input = 'sample.mp4'
 
     db_path = Path(args.db) if args.db else None
 
