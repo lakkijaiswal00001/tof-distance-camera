@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-app.py — Render Web Service for CareSetu v1.0
+app.py — Flask Web Service for CareSetu v1.0
 
 Provides:
   - Health check endpoint (GET /)
   - Video upload & analysis endpoint (POST /api/analyze)
   - Session history endpoint (GET /api/sessions)
+  - Runs gait analysis on startup via background processing
 
-Runs on Render as a headless web server (no webcam).
+For Render Free Web Service deployment.
 """
 
 from flask import Flask, request, jsonify
 import os
 import sys
+import threading
 from pathlib import Path
 import logging
 
@@ -31,15 +33,49 @@ app = Flask(__name__)
 # Initialize database
 db = DatabaseManager()
 
+# Track if analysis has been run on startup
+analysis_completed = False
+analysis_lock = threading.Lock()
+
+
+def run_startup_analysis():
+    """Run gait analysis on startup in background thread."""
+    global analysis_completed
+    try:
+        log.info("Starting background gait analysis on app startup...")
+        from main import OAScreeningPipeline
+
+        pipeline = OAScreeningPipeline()
+        metrics, duration = pipeline.run_file("sample.mp4")
+
+        assessment = pipeline.classifier.classify(metrics)
+        session_id = pipeline.db.save_session(
+            metrics, assessment,
+            mode='web',
+            duration_seconds=duration,
+        )
+
+        log.info(f"Analysis complete: session {session_id}, risk {assessment.level.value}")
+
+        with analysis_lock:
+            analysis_completed = True
+
+    except Exception as e:
+        log.error(f"Startup analysis error: {e}", exc_info=True)
+        with analysis_lock:
+            analysis_completed = True
+
+
 @app.route('/', methods=['GET'])
 def health_check():
-    """Health check endpoint."""
+    """Health check endpoint for Render."""
     return jsonify({
         'status': 'ok',
         'service': 'CareSetu v1.0 Gait Screening',
-        'mode': 'headless-file',
+        'mode': 'web-service',
         'version': '1.0.0',
-        'environment': 'Render (headless server)',
+        'environment': 'Render (Free Web Service)',
+        'analysis_completed': analysis_completed,
     }), 200
 
 
@@ -86,7 +122,6 @@ def analyze_video():
       - session_id, risk_level, risk_score, metrics
     """
     try:
-        # Import OAScreeningPipeline lazily to avoid import-time side effects
         from main import OAScreeningPipeline
 
         # Option 1: Accept uploaded file
@@ -95,7 +130,6 @@ def analyze_video():
             if video_file.filename == '':
                 return jsonify({'error': 'No file selected'}), 400
 
-            # Save uploaded file
             upload_dir = Path('/tmp/caresetu_uploads')
             upload_dir.mkdir(exist_ok=True)
             video_path = upload_dir / video_file.filename
@@ -103,22 +137,18 @@ def analyze_video():
             log.info(f"Uploaded video: {video_path}")
 
         # Option 2: Use existing file path
-        elif 'video_path' in request.json:
+        elif request.json and 'video_path' in request.json:
             video_path = request.json['video_path']
             if not Path(video_path).exists():
                 return jsonify({'error': f'Video file not found: {video_path}'}), 404
         else:
             return jsonify({'error': 'Provide video_file or video_path'}), 400
 
-        # Analyze the video
         log.info(f"Analyzing video: {video_path}")
         pipeline = OAScreeningPipeline()
         metrics, duration = pipeline.run_file(str(video_path))
 
-        # Classify risk
         assessment = pipeline.classifier.classify(metrics)
-
-        # Save to database
         session_id = pipeline.db.save_session(
             metrics, assessment,
             mode='api',
@@ -157,8 +187,9 @@ def status():
         return jsonify({
             'status': 'running',
             'total_sessions_analyzed': session_count,
-            'environment': 'Render (headless)',
+            'environment': 'Render (Free Web Service)',
             'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            'analysis_completed': analysis_completed,
         }), 200
     except Exception as e:
         log.error(f"Status error: {e}")
@@ -167,5 +198,10 @@ def status():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
-    log.info(f"Starting Flask app on 0.0.0.0:{port}")
+    log.info(f"Starting Flask web service on 0.0.0.0:{port}")
+
+    # Start background analysis thread
+    analysis_thread = threading.Thread(target=run_startup_analysis, daemon=True)
+    analysis_thread.start()
+
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
