@@ -102,10 +102,10 @@ class AlignmentValidator:
 
     def __init__(
         self,
-        centre_tolerance: float = 0.18,
-        min_body_fraction: float = 0.55,
-        max_body_fraction: float = 0.92,
-        required_stable_frames: int = 10,
+        centre_tolerance: float = 0.25,
+        min_body_fraction: float = 0.45,
+        max_body_fraction: float = 0.95,
+        required_stable_frames: int = 5,
         auto_bypass_timeout_s: float = 5.0,
     ) -> None:
         self.centre_tolerance = centre_tolerance

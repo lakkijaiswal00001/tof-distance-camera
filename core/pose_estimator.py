@@ -176,6 +176,13 @@ def _resolve_mp_solutions() -> tuple:
     mp_drawing = _try(
         "drawing_utils", "mediapipe.python.solutions.drawing_utils"
     )
+    # Try additional fallback paths
+    if mp_drawing is None:
+        try:
+            from mediapipe.solutions import drawing_utils as mp_drawing
+        except Exception:
+            pass
+
     if mp_drawing is None or not hasattr(mp_drawing, "draw_landmarks"):
         log.warning("mediapipe.drawing_utils unavailable — skeleton overlay disabled.")
         mp_drawing = _MockDrawingUtils()
