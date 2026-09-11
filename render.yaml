@@ -1,5 +1,5 @@
 services:
-  - type: background_worker
+  - type: worker
     name: caresetu-gait-screening
     runtime: python
     runtimeVersion: 3.11.9
