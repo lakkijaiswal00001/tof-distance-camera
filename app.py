@@ -173,3 +173,9 @@ def status():
     except Exception as e:
         log.error(f"Status error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))
+    log.info(f"Starting Flask app on 0.0.0.0:{port}")
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)

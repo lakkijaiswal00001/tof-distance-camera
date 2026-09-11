@@ -4,7 +4,7 @@ services:
     runtime: python
     runtimeVersion: 3.11.9
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --worker-class gthread --timeout 120 --log-level info --access-logfile - --error-logfile - app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --worker-class gthread --timeout 120 --log-level info --access-logfile - --error-logfile - --preload-app app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
@@ -12,6 +12,8 @@ services:
         value: "600"
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: PORT
+        value: "10000"
     preDeployCommand: python -m py_compile core/*.py ui/*.py main.py app.py
 
 databases:
