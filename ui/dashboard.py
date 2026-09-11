@@ -39,6 +39,16 @@ from core.database       import SessionRecord
 
 def _is_headless() -> bool:
     """Check if running in a headless environment (no display)."""
+    import platform
+    import sys
+
+    # On Windows/Mac, assume display is available unless explicitly disabled
+    system = platform.system()
+    if system in ("Windows", "Darwin"):
+        # Only headless if explicitly set
+        return os.environ.get("HEADLESS") == "true"
+
+    # On Linux, check for DISPLAY variable
     return not os.environ.get("DISPLAY") or os.environ.get("HEADLESS") == "true"
 
 
