@@ -281,8 +281,8 @@ class PoseEstimator:
     def __init__(
         self,
         model_complexity: int = 1,
-        min_detection_confidence: float = 0.55,
-        min_tracking_confidence: float = 0.50,
+        min_detection_confidence: float = 0.50,
+        min_tracking_confidence: float = 0.40,
         smooth_landmarks: bool = True,
     ) -> None:
         # ── Resolve MediaPipe sub-modules — never raises ───────────────────────

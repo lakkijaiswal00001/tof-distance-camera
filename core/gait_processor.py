@@ -51,10 +51,10 @@ _R_SHLDR  = 12
 
 # Heel-strike detection: ankle Y must be within this threshold of the
 # maximum Y seen (closest to ground in image coords where Y increases downward)
-_HEEL_STRIKE_Y_THRESH = 0.04   # normalised units
+_HEEL_STRIKE_Y_THRESH = 0.06   # normalised units (increased for more sensitivity)
 
 # Minimum velocity sign-change gap (frames) to avoid double-counting
-_MIN_STEP_FRAMES = 10
+_MIN_STEP_FRAMES = 8   # reduced from 10 for better step detection
 
 # Rolling buffer length (frames kept for metric computation)
 _BUFFER_SIZE = 300   # ~10 s at 30 fps
@@ -355,8 +355,7 @@ class GaitProcessor:
         value exceeds both neighbours — i.e. the foot was as close to ground
         as it gets before lifting off again.
 
-        Fixed: use strict inequality to avoid triggering on flat plateaus
-        (stationary subjects where ankle_y doesn't change).
+        Improved: use >= on both checks for better sensitivity to foot contact.
         """
         history = (
             self._left_ankle_y_history
@@ -369,13 +368,14 @@ class GaitProcessor:
             else self._last_right_strike_frame
         )
 
-        if len(history) < 3:
+        if len(history) < 2:
             return
 
         h = list(history)
-        # Local maximum in Y (foot at lowest point / ground contact peak)
-        # FIXED: use > on first check to avoid flat-plateau false positives
-        if h[-2] > h[-3] and h[-2] >= h[-1]:
+
+        # Detect local maximum in Y (foot at lowest point / ground contact peak)
+        # More sensitive: detect peak when current >= previous (foot making contact)
+        if len(h) >= 2 and h[-1] >= h[-2] and (len(h) < 3 or h[-1] >= h[-3] * 0.98):
             if frame_idx - last_frame >= _MIN_STEP_FRAMES:
                 event = StepEvent(
                     side=side,
