@@ -353,12 +353,15 @@ class OAScreeningPipeline:
         self.processor.fps = actual_fps
 
         start_time = time.monotonic()
+        poses_detected = 0
+        frames_processed = 0
 
         while True:
             ok, frame = self.camera.read()
             if not ok:
                 break
 
+            frames_processed += 1
             elapsed = time.monotonic() - start_time
 
             # Auto-stop
@@ -368,6 +371,7 @@ class OAScreeningPipeline:
 
             pose = self.estimator.process(frame)
             if pose:
+                poses_detected += 1
                 self.processor.update(pose)
                 self.estimator.draw_landmarks(frame, pose)
 
@@ -393,6 +397,21 @@ class OAScreeningPipeline:
 
         duration = time.monotonic() - start_time
         metrics  = self.processor.compute_metrics()
+
+        # Log detection statistics
+        detection_rate = (poses_detected / frames_processed * 100) if frames_processed > 0 else 0
+        print(f"\n  Detection Stats:")
+        print(f"    - Frames processed: {frames_processed}")
+        print(f"    - Poses detected: {poses_detected}")
+        print(f"    - Detection rate: {detection_rate:.1f}%")
+        print(f"    - Cadence: {metrics.cadence_spm:.1f} steps/min")
+        print(f"    - L Knee ROM: {metrics.left_knee_rom:.1f}°")
+        print(f"    - R Knee ROM: {metrics.right_knee_rom:.1f}°\n")
+
+        if poses_detected == 0:
+            print("  [WARN] No poses detected during recording!")
+            print("  [WARN] Check camera/video quality and lighting.")
+
         return metrics, duration
 
 
